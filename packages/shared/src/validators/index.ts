@@ -272,3 +272,19 @@ export {
   type SetPluginState,
   type ListPluginState,
 } from "./plugin.js";
+
+export {
+  MOCKUP_STATUSES,
+  MOCKUP_VIEWPORTS,
+  MOCKUP_FIDELITY_LEVELS,
+  isValidStatusTransition,
+  createMockupMetadataSchema,
+  updateMockupStatusSchema,
+  listMockupsQuerySchema,
+  type MockupStatus,
+  type MockupViewport,
+  type MockupFidelityLevel,
+  type CreateMockupMetadata,
+  type UpdateMockupStatus,
+  type ListMockupsQuery,
+} from "./mockup.js";
