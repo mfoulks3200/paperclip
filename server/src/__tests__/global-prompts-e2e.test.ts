@@ -16,6 +16,7 @@ import {
   projects,
 } from "@paperclipai/db";
 import { globalPromptRoutes } from "../routes/global-prompts.js";
+import { globalPromptService } from "../services/global-prompts.js";
 import { errorHandler } from "../middleware/index.js";
 
 vi.mock("../services/index.js", async () => {
@@ -120,8 +121,10 @@ describe("global prompts end-to-end", () => {
 
     await db.insert(companyMemberships).values({
       companyId,
-      userId: "board-user",
-      role: "owner",
+      principalType: "user",
+      principalId: "board-user",
+      status: "active",
+      membershipRole: "owner",
     });
 
     await db.insert(agents).values({
@@ -152,6 +155,10 @@ describe("global prompts end-to-end", () => {
       urlKey: "core",
       leadAgentId: ceoAgentId,
     });
+
+    // Seed standard prompts for the test company (migration only seeds companies that existed at migration time)
+    const svc = globalPromptService(db);
+    await svc.seedStandardPrompts(companyId);
   }, 30_000);
 
   afterAll(async () => {
@@ -189,6 +196,7 @@ describe("global prompts end-to-end", () => {
     return {
       type: "agent",
       agentId: ceoAgentId,
+      companyId,
       companyIds: [companyId],
       source: "agent_jwt",
       isInstanceAdmin: false,
