@@ -344,12 +344,29 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
   // When instructionsFilePath is configured, create a combined temp file that
   // includes both the file content and the path directive, so we only need
   // --append-system-prompt-file (Claude CLI forbids using both flags together).
+  // Global prompts are appended after instructions, before skills/bootstrap.
   let effectiveInstructionsFilePath = instructionsFilePath;
+  const globalPrompts = Array.isArray(context.paperclipGlobalPrompts)
+    ? (context.paperclipGlobalPrompts as Array<{ key: string; title: string; body: string; source: string }>)
+    : [];
+  const globalPromptsBlock = globalPrompts
+    .map(
+      (p) =>
+        `<global-prompt key="${p.key}" source="${p.source}">\n## ${p.title}\n${p.body}\n</global-prompt>`,
+    )
+    .join("\n\n");
+
   if (instructionsFilePath) {
     const instructionsContent = await fs.readFile(instructionsFilePath, "utf-8");
     const pathDirective = `\nThe above agent instructions were loaded from ${instructionsFilePath}. Resolve any relative file references from ${instructionsFileDir}.`;
     const combinedPath = path.join(skillsDir, "agent-instructions.md");
-    await fs.writeFile(combinedPath, instructionsContent + pathDirective, "utf-8");
+    const sections = [instructionsContent + pathDirective];
+    if (globalPromptsBlock) sections.push(globalPromptsBlock);
+    await fs.writeFile(combinedPath, sections.join("\n\n"), "utf-8");
+    effectiveInstructionsFilePath = combinedPath;
+  } else if (globalPromptsBlock) {
+    const combinedPath = path.join(skillsDir, "agent-instructions.md");
+    await fs.writeFile(combinedPath, globalPromptsBlock, "utf-8");
     effectiveInstructionsFilePath = combinedPath;
   }
 
@@ -392,6 +409,8 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
     bootstrapPromptChars: renderedBootstrapPrompt.length,
     sessionHandoffChars: sessionHandoffNote.length,
     heartbeatPromptChars: renderedPrompt.length,
+    globalPromptsChars: globalPromptsBlock.length,
+    globalPromptsCount: globalPrompts.length,
   };
 
   const buildClaudeArgs = (resumeSessionId: string | null) => {

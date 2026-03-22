@@ -2196,9 +2196,12 @@ export function heartbeatService(db: Db) {
           capped.push({ key: p.key, title: p.title ?? p.key, body: p.body, source: p.source });
         }
         context.paperclipGlobalPrompts = capped;
+      } else {
+        delete context.paperclipGlobalPrompts;
       }
     } catch (err) {
       logger.warn({ err, agentId: agent.id, runId: run.id }, "Failed to resolve global prompts — skipping injection");
+      delete context.paperclipGlobalPrompts;
     }
 
     const runtimeSessionFallback = taskKey || resetTaskSession ? null : runtime.sessionId;

@@ -188,3 +188,4 @@ export type {
   PluginJobRunRecord,
   PluginWebhookDeliveryRecord,
 } from "./plugin.js";
+export type { ResolvedGlobalPrompt } from "./global-prompt.js";
