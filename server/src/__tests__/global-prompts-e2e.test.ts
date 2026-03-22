@@ -189,6 +189,7 @@ describe("global prompts end-to-end", () => {
     return {
       type: "agent",
       agentId: ceoAgentId,
+      companyId,
       companyIds: [companyId],
       source: "agent_jwt",
       isInstanceAdmin: false,
@@ -358,6 +359,7 @@ describe("global prompts end-to-end", () => {
     const app = createApp({
       type: "agent",
       agentId: engineerAgentId,
+      companyId,
       companyIds: [companyId],
       source: "agent_jwt",
       isInstanceAdmin: false,
@@ -386,6 +388,7 @@ describe("global prompts end-to-end", () => {
     const app = createApp({
       type: "agent",
       agentId: engineerAgentId,
+      companyId,
       companyIds: [companyId],
       source: "agent_jwt",
       isInstanceAdmin: false,

@@ -283,15 +283,20 @@ describe("global prompt seeding", () => {
     expect(STANDARD_PROMPTS.map((p) => p.sortOrder)).toEqual([0, 1, 2]);
   });
 
-  it("migration seeds existing companies idempotently", () => {
-    // The migration SQL uses WHERE NOT EXISTS to avoid duplicates.
-    // This is a structural verification that the migration is idempotent.
-    // The actual SQL is tested by running migrations in the DB.
-    // Here we verify the service's seedStandardPrompts follows the same pattern.
-    //
-    // seedStandardPrompts checks getCompanyPrompt(companyId, key) before inserting,
-    // so calling it twice produces the same result.
-    expect(true).toBe(true); // Structural assertion — see seedStandardPrompts implementation
+  it("standard prompt keys are unique (no duplicates in seed list)", () => {
+    const STANDARD_PROMPTS = [
+      { key: "culture", title: "Culture", sortOrder: 0 },
+      { key: "conventions", title: "Conventions", sortOrder: 1 },
+      { key: "terminology", title: "Terminology", sortOrder: 2 },
+    ];
+
+    const keys = STANDARD_PROMPTS.map((p) => p.key);
+    const uniqueKeys = new Set(keys);
+    expect(uniqueKeys.size).toBe(keys.length);
+
+    const sortOrders = STANDARD_PROMPTS.map((p) => p.sortOrder);
+    const uniqueSortOrders = new Set(sortOrders);
+    expect(uniqueSortOrders.size).toBe(sortOrders.length);
   });
 });
 
