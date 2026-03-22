@@ -11,6 +11,30 @@ import type {
 } from "@paperclipai/shared";
 import { api } from "./client";
 
+export type MockupStatus = "draft" | "in_review" | "approved" | "rejected";
+
+export interface IssueMockup {
+  id: string;
+  companyId: string;
+  issueId: string;
+  assetId: string;
+  title: string;
+  version: number;
+  viewport: string;
+  fidelityLevel: string;
+  status: MockupStatus;
+  notes: string | null;
+  contentType: string;
+  byteSize: number;
+  sha256: string;
+  originalFilename: string | null;
+  createdByAgentId: string | null;
+  createdByUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  previewPath: string;
+}
+
 export const issuesApi = {
   list: (
     companyId: string,
@@ -103,4 +127,11 @@ export const issuesApi = {
   updateWorkProduct: (id: string, data: Record<string, unknown>) =>
     api.patch<IssueWorkProduct>(`/work-products/${id}`, data),
   deleteWorkProduct: (id: string) => api.delete<IssueWorkProduct>(`/work-products/${id}`),
+
+  // Mockups
+  listMockups: (issueId: string) => api.get<IssueMockup[]>(`/issues/${issueId}/mockups`),
+  getMockup: (mockupId: string) => api.get<IssueMockup>(`/mockups/${mockupId}`),
+  updateMockupStatus: (mockupId: string, status: MockupStatus) =>
+    api.patch<IssueMockup>(`/mockups/${mockupId}`, { status }),
+  deleteMockup: (mockupId: string) => api.delete<{ ok: true }>(`/mockups/${mockupId}`),
 };

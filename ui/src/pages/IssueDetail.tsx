@@ -19,6 +19,7 @@ import { relativeTime, cn, formatTokens, visibleRunCostUsd } from "../lib/utils"
 import { InlineEditor } from "../components/InlineEditor";
 import { CommentThread } from "../components/CommentThread";
 import { IssueDocumentsSection } from "../components/IssueDocumentsSection";
+import { IssueMockupsSection } from "../components/mockups/IssueMockupsSection";
 import { IssueProperties } from "../components/IssueProperties";
 import { LiveRunWidget } from "../components/LiveRunWidget";
 import type { MentionOption } from "../components/MarkdownEditor";
@@ -912,6 +913,8 @@ export function IssueDetail() {
         }}
         extraActions={!hasAttachments ? attachmentUploadButton : undefined}
       />
+
+      <IssueMockupsSection issueId={issueId!} />
 
       {hasAttachments ? (
         <div
