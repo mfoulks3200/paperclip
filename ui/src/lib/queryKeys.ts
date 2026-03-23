@@ -91,6 +91,13 @@ export const queryKeys = {
     schedulerHeartbeats: ["instance", "scheduler-heartbeats"] as const,
     experimentalSettings: ["instance", "experimental-settings"] as const,
   },
+  globalPrompts: {
+    company: (companyId: string) => ["global-prompts", "company", companyId] as const,
+    project: (projectId: string) => ["global-prompts", "project", projectId] as const,
+    overrides: (agentId: string) => ["global-prompts", "overrides", agentId] as const,
+    resolved: (agentId: string, projectId?: string) =>
+      ["global-prompts", "resolved", agentId, projectId] as const,
+  },
   health: ["health"] as const,
   secrets: {
     list: (companyId: string) => ["secrets", companyId] as const,

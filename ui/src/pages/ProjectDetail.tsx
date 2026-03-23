@@ -24,10 +24,12 @@ import { projectRouteRef, cn } from "../lib/utils";
 import { Tabs } from "@/components/ui/tabs";
 import { PluginLauncherOutlet } from "@/plugins/launchers";
 import { PluginSlotMount, PluginSlotOutlet, usePluginSlots } from "@/plugins/slots";
+import { GlobalPromptsManager } from "../components/GlobalPromptsManager";
+import { globalPromptsApi } from "../api/globalPrompts";
 
 /* ── Top-level tab types ── */
 
-type ProjectBaseTab = "overview" | "list" | "configuration" | "budget";
+type ProjectBaseTab = "overview" | "list" | "configuration" | "prompts" | "budget";
 type ProjectPluginTab = `plugin:${string}`;
 type ProjectTab = ProjectBaseTab | ProjectPluginTab;
 
@@ -42,6 +44,7 @@ function resolveProjectTab(pathname: string, projectId: string): ProjectTab | nu
   const tab = segments[projectsIdx + 2];
   if (tab === "overview") return "overview";
   if (tab === "configuration") return "configuration";
+  if (tab === "prompts") return "prompts";
   if (tab === "budget") return "budget";
   if (tab === "issues") return "list";
   return null;
@@ -241,6 +244,13 @@ export function ProjectDetail() {
   const canonicalProjectRef = project ? projectRouteRef(project) : routeProjectRef;
   const projectLookupRef = project?.id ?? routeProjectRef;
   const resolvedCompanyId = project?.companyId ?? selectedCompanyId;
+
+  const { data: companyPrompts, isLoading: companyPromptsLoading } = useQuery({
+    queryKey: queryKeys.globalPrompts.company(resolvedCompanyId!),
+    queryFn: () => globalPromptsApi.listCompany(resolvedCompanyId!),
+    enabled: !!resolvedCompanyId,
+  });
+
   const {
     slots: pluginDetailSlots,
     isLoading: pluginDetailSlotsLoading,
@@ -339,6 +349,10 @@ export function ProjectDetail() {
     }
     if (activeTab === "configuration") {
       navigate(`/projects/${canonicalProjectRef}/configuration`, { replace: true });
+      return;
+    }
+    if (activeTab === "prompts") {
+      navigate(`/projects/${canonicalProjectRef}/prompts`, { replace: true });
       return;
     }
     if (activeTab === "budget") {
@@ -495,6 +509,8 @@ export function ProjectDetail() {
       navigate(`/projects/${canonicalProjectRef}/budget`);
     } else if (tab === "configuration") {
       navigate(`/projects/${canonicalProjectRef}/configuration`);
+    } else if (tab === "prompts") {
+      navigate(`/projects/${canonicalProjectRef}/prompts`);
     } else {
       navigate(`/projects/${canonicalProjectRef}/issues`);
     }
@@ -562,6 +578,7 @@ export function ProjectDetail() {
             { value: "list", label: "Issues" },
             { value: "overview", label: "Overview" },
             { value: "configuration", label: "Configuration" },
+            { value: "prompts", label: "Prompts" },
             { value: "budget", label: "Budget" },
             ...pluginTabItems.map((item) => ({
               value: item.value,
@@ -598,6 +615,17 @@ export function ProjectDetail() {
             getFieldSaveState={(field) => fieldSaveStates[field] ?? "idle"}
             onArchive={(archived) => archiveProject.mutate(archived)}
             archivePending={archiveProject.isPending}
+          />
+        </div>
+      )}
+
+      {activeTab === "prompts" && project?.id && resolvedCompanyId && (
+        <div className="max-w-3xl">
+          <GlobalPromptsManager
+            scope="project"
+            scopeId={project.id}
+            inheritedPrompts={companyPrompts}
+            inheritedLoading={companyPromptsLoading}
           />
         </div>
       )}

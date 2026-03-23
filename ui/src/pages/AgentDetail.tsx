@@ -220,11 +220,12 @@ function scrollToContainerBottom(container: ScrollContainer, behavior: ScrollBeh
   container.scrollTo({ top: container.scrollHeight, behavior });
 }
 
-type AgentDetailView = "dashboard" | "instructions" | "configuration" | "skills" | "runs" | "budget";
+type AgentDetailView = "dashboard" | "instructions" | "configuration" | "skills" | "runs" | "budget" | "prompt-overrides";
 
 function parseAgentDetailView(value: string | null): AgentDetailView {
   if (value === "instructions" || value === "prompts") return "instructions";
   if (value === "configure" || value === "configuration") return "configuration";
+  if (value === "prompt-overrides") return "prompt-overrides";
   if (value === "skills") return "skills";
   if (value === "budget") return "budget";
   if (value === "runs") return value;
@@ -650,6 +651,8 @@ export function AgentDetail() {
               ? "runs"
               : activeView === "budget"
                 ? "budget"
+                : activeView === "prompt-overrides"
+                  ? "prompt-overrides"
               : "dashboard";
     if (routeAgentRef !== canonicalAgentRef || urlTab !== canonicalTab) {
       navigate(`/agents/${canonicalAgentRef}/${canonicalTab}`, { replace: true });
@@ -911,6 +914,7 @@ export function AgentDetail() {
               { value: "instructions", label: "Instructions" },
               { value: "skills", label: "Skills" },
               { value: "configuration", label: "Configuration" },
+              { value: "prompt-overrides", label: "Prompt Overrides" },
               { value: "runs", label: "Runs" },
               { value: "budget", label: "Budget" },
             ]}
@@ -1023,6 +1027,13 @@ export function AgentDetail() {
         <AgentSkillsTab
           agent={agent}
           companyId={resolvedCompanyId ?? undefined}
+        />
+      )}
+
+      {activeView === "prompt-overrides" && resolvedCompanyId && (
+        <AgentPromptOverridesTab
+          agent={agent}
+          companyId={resolvedCompanyId}
         />
       )}
 
@@ -2260,6 +2271,20 @@ function PromptEditorSkeleton() {
     <div className="space-y-3">
       <Skeleton className="h-10 w-full" />
       <Skeleton className="h-[420px] w-full" />
+    </div>
+  );
+}
+
+function AgentPromptOverridesTab({
+  agent,
+  companyId,
+}: {
+  agent: Agent;
+  companyId: string;
+}) {
+  return (
+    <div className="text-sm text-muted-foreground py-8 text-center">
+      Agent prompt overrides coming soon.
     </div>
   );
 }

@@ -15,6 +15,7 @@ import {
   ToggleField,
   HintIcon
 } from "../components/agent-config-primitives";
+import { GlobalPromptsManager } from "../components/GlobalPromptsManager";
 
 type AgentSnippetInput = {
   onboardingTextUrl: string;
@@ -462,6 +463,18 @@ export function CompanySettings() {
           )}
         </div>
       </div>
+
+      {/* Prompts */}
+      {selectedCompanyId && (
+        <div className="space-y-4">
+          <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            Prompts
+          </div>
+          <div className="rounded-md border border-border px-4 py-4">
+            <GlobalPromptsManager scope="company" scopeId={selectedCompanyId} />
+          </div>
+        </div>
+      )}
 
       {/* Import / Export */}
       <div className="space-y-4">
