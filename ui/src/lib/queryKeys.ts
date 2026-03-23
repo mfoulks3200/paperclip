@@ -123,13 +123,6 @@ export const queryKeys = {
   liveRuns: (companyId: string) => ["live-runs", companyId] as const,
   runIssues: (runId: string) => ["run-issues", runId] as const,
   org: (companyId: string) => ["org", companyId] as const,
-  prompts: {
-    company: (companyId: string) => ["prompts", "company", companyId] as const,
-    project: (projectId: string) => ["prompts", "project", projectId] as const,
-    agentOverrides: (agentId: string) => ["prompts", "agent-overrides", agentId] as const,
-    resolved: (agentId: string, projectId?: string) =>
-      ["prompts", "resolved", agentId, projectId ?? "__none__"] as const,
-  },
   skills: {
     available: ["skills", "available"] as const,
   },

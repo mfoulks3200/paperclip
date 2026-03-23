@@ -3,7 +3,7 @@ import { z } from "zod";
 export const MOCKUP_STATUSES = ["draft", "in_review", "approved", "rejected"] as const;
 export type MockupStatus = (typeof MOCKUP_STATUSES)[number];
 
-export const MOCKUP_VIEWPORTS = ["mobile", "tablet", "desktop"] as const;
+export const MOCKUP_VIEWPORTS = ["mobile", "tablet", "desktop", "wide"] as const;
 export type MockupViewport = (typeof MOCKUP_VIEWPORTS)[number];
 
 export const MOCKUP_FIDELITY_LEVELS = ["low", "medium", "high"] as const;
