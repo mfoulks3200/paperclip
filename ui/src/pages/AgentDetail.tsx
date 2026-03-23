@@ -2275,19 +2275,8 @@ function PromptEditorSkeleton() {
   );
 }
 
-function AgentPromptOverridesTab({
-  agent,
-  companyId,
-}: {
-  agent: Agent;
-  companyId: string;
-}) {
-  return (
-    <div className="text-sm text-muted-foreground py-8 text-center">
-      Agent prompt overrides coming soon.
-    </div>
-  );
-}
+// Re-export from dedicated component file
+import { AgentPromptOverridesTab } from "../components/AgentPromptOverrides";
 
 function AgentSkillsTab({
   agent,
