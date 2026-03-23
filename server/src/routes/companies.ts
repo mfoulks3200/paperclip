@@ -238,6 +238,9 @@ export function companyRoutes(db: Db, storage?: StorageService) {
         req.actor.userId ?? "board",
       );
     }
+    // Seed standard global prompts for the new company
+    const { globalPromptService } = await import("../services/global-prompts.js");
+    await globalPromptService(db).seedStandardPrompts(company.id, { userId: req.actor.userId ?? "board" });
     res.status(201).json(company);
   });
 

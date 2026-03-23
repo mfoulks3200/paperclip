@@ -2169,6 +2169,38 @@ export function heartbeatService(db: Db) {
     if (executionWorkspace.projectId && !readNonEmptyString(context.projectId)) {
       context.projectId = executionWorkspace.projectId;
     }
+
+    // --- Global prompts injection (PAP-31) ---
+    const globalPromptsProjectId = readNonEmptyString(context.projectId) ?? executionWorkspace.projectId ?? null;
+    try {
+      const { resolveForAgent } = await import("./global-prompts.js").then((m) => m.globalPromptService(db));
+      const { resolvedPrompts } = await resolveForAgent(
+        agent.id,
+        agent.companyId,
+        globalPromptsProjectId,
+      );
+      if (resolvedPrompts.length > 0) {
+        const MAX_GLOBAL_PROMPTS_BYTES = 512 * 1024;
+        let totalBytes = 0;
+        const capped: Array<{ key: string; title: string; body: string; source: "company" | "project" }> = [];
+        for (const p of resolvedPrompts) {
+          const bodyBytes = Buffer.byteLength(p.body, "utf-8");
+          if (totalBytes + bodyBytes > MAX_GLOBAL_PROMPTS_BYTES) {
+            logger.warn(
+              { agentId: agent.id, runId: run.id, totalBytes, cap: MAX_GLOBAL_PROMPTS_BYTES, droppedKey: p.key },
+              "Global prompts exceeded 512KB cap — truncating remaining prompts",
+            );
+            break;
+          }
+          totalBytes += bodyBytes;
+          capped.push({ key: p.key, title: p.title ?? p.key, body: p.body, source: p.source });
+        }
+        context.paperclipGlobalPrompts = capped;
+      }
+    } catch (err) {
+      logger.warn({ err, agentId: agent.id, runId: run.id }, "Failed to resolve global prompts — skipping injection");
+    }
+
     const runtimeSessionFallback = taskKey || resetTaskSession ? null : runtime.sessionId;
     let previousSessionDisplayId = truncateDisplayId(
       taskSessionForRun?.sessionDisplayId ??
