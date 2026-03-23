@@ -8,8 +8,10 @@ import { accessApi } from "../api/access";
 import { assetsApi } from "../api/assets";
 import { queryKeys } from "../lib/queryKeys";
 import { Button } from "@/components/ui/button";
-import { Settings, Check, Download, Upload } from "lucide-react";
+import { Settings, Check, Download, Upload, Eye } from "lucide-react";
 import { CompanyPatternIcon } from "../components/CompanyPatternIcon";
+import { CompanyPromptsList } from "../components/PromptsList";
+import { PromptsPreviewPanel } from "../components/PromptsPreviewPanel";
 import {
   Field,
   ToggleField,
@@ -48,6 +50,7 @@ export function CompanySettings() {
     setLogoUrl(selectedCompany.logoUrl ?? "");
   }, [selectedCompany]);
 
+  const [showPreviewPanel, setShowPreviewPanel] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteSnippet, setInviteSnippet] = useState<string | null>(null);
   const [snippetCopied, setSnippetCopied] = useState(false);
@@ -390,6 +393,24 @@ export function CompanySettings() {
           />
         </div>
       </div>
+
+      {/* Prompts */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <CompanyPromptsList companyId={selectedCompanyId!} />
+        </div>
+        <div className="flex justify-end">
+          <Button size="sm" variant="ghost" onClick={() => setShowPreviewPanel(true)}>
+            <Eye className="h-3 w-3 mr-1" />
+            Preview resolved prompts
+          </Button>
+        </div>
+      </div>
+
+      <PromptsPreviewPanel
+        open={showPreviewPanel}
+        onClose={() => setShowPreviewPanel(false)}
+      />
 
       {/* Invites */}
       <div className="space-y-4">

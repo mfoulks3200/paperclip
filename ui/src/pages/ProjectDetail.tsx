@@ -22,12 +22,13 @@ import { PageSkeleton } from "../components/PageSkeleton";
 import { PageTabBar } from "../components/PageTabBar";
 import { projectRouteRef, cn } from "../lib/utils";
 import { Tabs } from "@/components/ui/tabs";
+import { ProjectPromptsList } from "../components/PromptsList";
 import { PluginLauncherOutlet } from "@/plugins/launchers";
 import { PluginSlotMount, PluginSlotOutlet, usePluginSlots } from "@/plugins/slots";
 
 /* ── Top-level tab types ── */
 
-type ProjectBaseTab = "overview" | "list" | "configuration" | "budget";
+type ProjectBaseTab = "overview" | "list" | "configuration" | "prompts" | "budget";
 type ProjectPluginTab = `plugin:${string}`;
 type ProjectTab = ProjectBaseTab | ProjectPluginTab;
 
@@ -42,6 +43,7 @@ function resolveProjectTab(pathname: string, projectId: string): ProjectTab | nu
   const tab = segments[projectsIdx + 2];
   if (tab === "overview") return "overview";
   if (tab === "configuration") return "configuration";
+  if (tab === "prompts") return "prompts";
   if (tab === "budget") return "budget";
   if (tab === "issues") return "list";
   return null;
@@ -341,6 +343,10 @@ export function ProjectDetail() {
       navigate(`/projects/${canonicalProjectRef}/configuration`, { replace: true });
       return;
     }
+    if (activeTab === "prompts") {
+      navigate(`/projects/${canonicalProjectRef}/prompts`, { replace: true });
+      return;
+    }
     if (activeTab === "budget") {
       navigate(`/projects/${canonicalProjectRef}/budget`, { replace: true });
       return;
@@ -467,6 +473,9 @@ export function ProjectDetail() {
     if (cachedTab === "configuration") {
       return <Navigate to={`/projects/${canonicalProjectRef}/configuration`} replace />;
     }
+    if (cachedTab === "prompts") {
+      return <Navigate to={`/projects/${canonicalProjectRef}/prompts`} replace />;
+    }
     if (cachedTab === "budget") {
       return <Navigate to={`/projects/${canonicalProjectRef}/budget`} replace />;
     }
@@ -495,6 +504,8 @@ export function ProjectDetail() {
       navigate(`/projects/${canonicalProjectRef}/budget`);
     } else if (tab === "configuration") {
       navigate(`/projects/${canonicalProjectRef}/configuration`);
+    } else if (tab === "prompts") {
+      navigate(`/projects/${canonicalProjectRef}/prompts`);
     } else {
       navigate(`/projects/${canonicalProjectRef}/issues`);
     }
@@ -562,6 +573,7 @@ export function ProjectDetail() {
             { value: "list", label: "Issues" },
             { value: "overview", label: "Overview" },
             { value: "configuration", label: "Configuration" },
+            { value: "prompts", label: "Prompts" },
             { value: "budget", label: "Budget" },
             ...pluginTabItems.map((item) => ({
               value: item.value,
@@ -599,6 +611,12 @@ export function ProjectDetail() {
             onArchive={(archived) => archiveProject.mutate(archived)}
             archivePending={archiveProject.isPending}
           />
+        </div>
+      )}
+
+      {activeTab === "prompts" && project?.id && resolvedCompanyId && (
+        <div className="max-w-2xl">
+          <ProjectPromptsList projectId={project.id} companyId={resolvedCompanyId} />
         </div>
       )}
 
