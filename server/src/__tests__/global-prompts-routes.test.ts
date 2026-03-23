@@ -470,6 +470,26 @@ describe("project prompt routes", () => {
       expect(res.body).toHaveLength(1);
     });
 
+    it("filters by enabled=true", async () => {
+      mockGlobalPromptService.listProjectPrompts.mockResolvedValue([]);
+
+      const res = await request(createApp(boardActor))
+        .get(`/api/projects/${PROJECT_ID}/prompts?enabled=true`);
+
+      expect(res.status).toBe(200);
+      expect(mockGlobalPromptService.listProjectPrompts).toHaveBeenCalledWith(PROJECT_ID, { enabled: true });
+    });
+
+    it("filters by enabled=false", async () => {
+      mockGlobalPromptService.listProjectPrompts.mockResolvedValue([]);
+
+      const res = await request(createApp(boardActor))
+        .get(`/api/projects/${PROJECT_ID}/prompts?enabled=false`);
+
+      expect(res.status).toBe(200);
+      expect(mockGlobalPromptService.listProjectPrompts).toHaveBeenCalledWith(PROJECT_ID, { enabled: false });
+    });
+
     it("returns 404 for non-existent project", async () => {
       mockProjectService.getById.mockResolvedValue(null);
 
@@ -584,6 +604,13 @@ describe("project prompt routes", () => {
         .delete(`/api/projects/${PROJECT_ID}/prompts/nonexistent`);
 
       expect(res.status).toBe(404);
+    });
+
+    it("rejects non-manager agent from deleting project prompts", async () => {
+      const res = await request(createApp(engineerActor()))
+        .delete(`/api/projects/${PROJECT_ID}/prompts/culture`);
+
+      expect(res.status).toBe(403);
     });
   });
 });
@@ -778,6 +805,23 @@ describe("resolved prompts route", () => {
       expect(res.status).toBe(200);
       expect(res.body.resolvedPrompts).toHaveLength(1);
       expect(res.body.agentId).toBe(AGENT_ID);
+    });
+
+    it("resolves without projectId (company-only prompts)", async () => {
+      mockGlobalPromptService.resolveForAgent.mockResolvedValue({
+        resolvedPrompts: [{ key: "culture", title: "Culture", body: "Values", source: "company", sourceId: PROMPT_ID, overriddenByProject: false }],
+        disabledPrompts: [],
+      });
+
+      const res = await request(createApp(boardActor))
+        .get(`/api/agents/${AGENT_ID}/resolved-prompts`);
+
+      expect(res.status).toBe(200);
+      expect(mockGlobalPromptService.resolveForAgent).toHaveBeenCalledWith(
+        AGENT_ID,
+        COMPANY_ID,
+        null,
+      );
     });
 
     it("passes projectId query parameter", async () => {
