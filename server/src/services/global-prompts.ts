@@ -252,40 +252,43 @@ export function globalPromptService(db: Db) {
       .then((rows) => rows[0] ?? null);
     if (!prompt) throw notFound("Global prompt not found");
 
-    const existing = await db
-      .select()
-      .from(agentPromptOverrides)
-      .where(
-        and(
-          eq(agentPromptOverrides.agentId, agentId),
-          eq(agentPromptOverrides.globalPromptId, globalPromptId),
-        ),
-      )
-      .then((rows) => rows[0] ?? null);
+    return db.transaction(async (tx) => {
+      const existing = await tx
+        .select()
+        .from(agentPromptOverrides)
+        .where(
+          and(
+            eq(agentPromptOverrides.agentId, agentId),
+            eq(agentPromptOverrides.globalPromptId, globalPromptId),
+          ),
+        )
+        .for("update")
+        .then((rows) => rows[0] ?? null);
 
-    if (existing) {
-      const rows = await db
-        .update(agentPromptOverrides)
-        .set({
+      if (existing) {
+        const rows = await tx
+          .update(agentPromptOverrides)
+          .set({
+            disabled,
+            updatedAt: new Date(),
+          })
+          .where(eq(agentPromptOverrides.id, existing.id))
+          .returning();
+        return { override: rows[0]!, created: false };
+      }
+
+      const rows = await tx
+        .insert(agentPromptOverrides)
+        .values({
+          agentId,
+          globalPromptId,
           disabled,
-          updatedAt: new Date(),
+          createdByAgentId: actor.agentId ?? null,
+          createdByUserId: actor.userId ?? null,
         })
-        .where(eq(agentPromptOverrides.id, existing.id))
         .returning();
-      return { override: rows[0]!, created: false };
-    }
-
-    const rows = await db
-      .insert(agentPromptOverrides)
-      .values({
-        agentId,
-        globalPromptId,
-        disabled,
-        createdByAgentId: actor.agentId ?? null,
-        createdByUserId: actor.userId ?? null,
-      })
-      .returning();
-    return { override: rows[0]!, created: true };
+      return { override: rows[0]!, created: true };
+    });
   }
 
   async function deleteAgentOverride(agentId: string, globalPromptId: string) {
@@ -394,22 +397,35 @@ export function globalPromptService(db: Db) {
   // ─── Seeding ───
 
   async function seedStandardPrompts(companyId: string, actor?: Actor) {
-    for (const prompt of STANDARD_PROMPTS) {
-      const existing = await getCompanyPrompt(companyId, prompt.key);
-      if (!existing) {
-        await db.insert(globalPrompts).values({
-          companyId,
-          projectId: null,
-          key: prompt.key,
-          title: prompt.title,
-          body: prompt.body,
-          enabled: true,
-          sortOrder: prompt.sortOrder,
-          createdByAgentId: actor?.agentId ?? null,
-          createdByUserId: actor?.userId ?? "system",
-        });
+    await db.transaction(async (tx) => {
+      for (const prompt of STANDARD_PROMPTS) {
+        const existing = await tx
+          .select()
+          .from(globalPrompts)
+          .where(
+            and(
+              eq(globalPrompts.companyId, companyId),
+              isNull(globalPrompts.projectId),
+              eq(globalPrompts.key, prompt.key),
+            ),
+          )
+          .for("update")
+          .then((rows) => rows[0] ?? null);
+        if (!existing) {
+          await tx.insert(globalPrompts).values({
+            companyId,
+            projectId: null,
+            key: prompt.key,
+            title: prompt.title,
+            body: prompt.body,
+            enabled: true,
+            sortOrder: prompt.sortOrder,
+            createdByAgentId: actor?.agentId ?? null,
+            createdByUserId: actor?.userId ?? "system",
+          });
+        }
       }
-    }
+    });
   }
 
   return {
