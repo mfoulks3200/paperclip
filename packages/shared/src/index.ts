@@ -536,6 +536,19 @@ export {
   type CompleteSparringSession,
   type AbortSparringSession,
   type SparringSessionConfig,
+  MOCKUP_STATUSES,
+  MOCKUP_VIEWPORTS,
+  MOCKUP_FIDELITY_LEVELS,
+  isValidStatusTransition,
+  createMockupMetadataSchema,
+  updateMockupStatusSchema,
+  listMockupsQuerySchema,
+  type MockupStatus,
+  type MockupViewport,
+  type MockupFidelityLevel,
+  type CreateMockupMetadata,
+  type UpdateMockupStatus,
+  type ListMockupsQuery,
 } from "./validators/index.js";
 
 export { API_PREFIX, API } from "./api.js";
