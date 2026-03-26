@@ -58,4 +58,3 @@ export { sparringParticipants } from "./sparring_participants.js";
 export { sparringTurns } from "./sparring_turns.js";
 export { globalPrompts } from "./global_prompts.js";
 export { agentPromptOverrides } from "./agent_prompt_overrides.js";
-export { issueMockups } from "./issue_mockups.js";
