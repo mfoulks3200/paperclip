@@ -56,7 +56,7 @@ export function AgentPromptOverrides({ agentId, companyId }: AgentPromptOverride
         return (
           <div
             key={p.id}
-            className="flex items-center justify-between rounded-lg border border-border p-2"
+            className="flex items-center justify-between rounded-md border border-border p-2"
           >
             <div className="flex items-center gap-2">
               <span className="text-xs font-medium">{p.title ?? p.key}</span>

@@ -75,7 +75,7 @@ export function PromptsPreviewPanel({ open, onClose }: PromptsPreviewPanelProps)
                 </p>
               )}
               {resolved.resolvedPrompts.map((p) => (
-                <div key={p.key} className="rounded-lg border border-border p-3 space-y-1">
+                <div key={p.key} className="rounded-md border border-border p-3 space-y-1">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-medium">{p.title ?? p.key}</span>
                     <span className="text-[10px] text-muted-foreground font-mono">{p.key}</span>

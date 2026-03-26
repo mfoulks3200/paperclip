@@ -21,7 +21,7 @@ function PromptEditor({
   const [body, setBody] = useState(prompt?.body ?? "");
 
   return (
-    <div className="space-y-2 rounded-lg border border-border p-3">
+    <div className="space-y-2 rounded-md border border-border p-3">
       {!prompt && (
         <Input
           placeholder="Prompt key (e.g. security)"
@@ -69,7 +69,7 @@ function PromptRow({
   onDelete: () => void;
 }) {
   return (
-    <div className="flex items-start justify-between gap-2 rounded-lg border border-border p-3">
+    <div className="flex items-start justify-between gap-2 rounded-md border border-border p-3">
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium">{prompt.title ?? prompt.key}</span>
