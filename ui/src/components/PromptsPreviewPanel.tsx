@@ -45,7 +45,7 @@ export function PromptsPreviewPanel({ open, onClose }: PromptsPreviewPanelProps)
         <SheetHeader>
           <SheetTitle>Resolved Prompts Preview</SheetTitle>
         </SheetHeader>
-        <div className="mt-4 space-y-4">
+        <div className="mt-4 space-y-4 px-4">
           <Select value={selectedAgentId} onValueChange={setSelectedAgentId}>
             <SelectTrigger className="text-xs">
               <SelectValue placeholder="Select an agent" />
