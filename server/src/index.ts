@@ -661,8 +661,12 @@ export async function startServer(): Promise<StartedServer> {
   
     // Reap orphaned running runs at startup while in-memory execution state is empty,
     // then resume any persisted queued runs that were waiting on the previous process.
+    // watchDetachedOrphanedPids runs after reap: any run whose PID was still alive at reap
+    // time is left in process_detached state; the watcher monitors each orphaned PID and
+    // finalizes it (failed + retry) once the subprocess exits.
     void heartbeat
       .reapOrphanedRuns()
+      .then(() => heartbeat.watchDetachedOrphanedPids())
       .then(() => heartbeat.promoteDueScheduledRetries())
       .then(async (promotion) => {
         await heartbeat.resumeQueuedRuns();
