@@ -3879,6 +3879,131 @@ export function heartbeatService(db: Db) {
     return { reaped: reaped.length, runIds: reaped };
   }
 
+  // Tracks run IDs for which a PID watcher has already been spawned, to avoid
+  // double-watching if watchDetachedOrphanedPids is called more than once.
+  const watchedDetachedRunIds = new Set<string>();
+
+  async function watchDetachedOrphanedPids(opts?: { pollIntervalMs?: number; maxWatchMs?: number }) {
+    const pollIntervalMs = opts?.pollIntervalMs ?? 5_000;
+    const maxWatchMs = opts?.maxWatchMs ?? 4 * 60 * 60 * 1_000; // 4 hours
+
+    const detachedRuns = await db
+      .select({
+        run: heartbeatRuns,
+        adapterType: agents.adapterType,
+        adapterConfig: agents.adapterConfig,
+      })
+      .from(heartbeatRuns)
+      .innerJoin(agents, eq(heartbeatRuns.agentId, agents.id))
+      .where(and(eq(heartbeatRuns.status, "running"), eq(heartbeatRuns.errorCode, DETACHED_PROCESS_ERROR_CODE)));
+
+    const toWatch = detachedRuns.filter(
+      ({ run }) =>
+        run.processPid != null &&
+        isProcessAlive(run.processPid) &&
+        !watchedDetachedRunIds.has(run.id),
+    );
+
+    if (toWatch.length === 0) return { watching: 0 };
+
+    logger.warn(
+      { count: toWatch.length, runIds: toWatch.map((r) => r.run.id) },
+      "startup: found detached orphaned runs with live PIDs — starting PID watchers",
+    );
+
+    for (const { run, adapterType, adapterConfig } of toWatch) {
+      const pid = run.processPid!;
+      watchedDetachedRunIds.add(run.id);
+      const watchStart = Date.now();
+
+      const intervalId = setInterval(() => {
+        void (async () => {
+          const elapsed = Date.now() - watchStart;
+          const timedOut = elapsed >= maxWatchMs;
+          const pidDead = !isProcessAlive(pid);
+
+          if (!timedOut && !pidDead) return;
+
+          clearInterval(intervalId);
+          watchedDetachedRunIds.delete(run.id);
+
+          // Re-fetch to confirm the run hasn't already been finalized by a concurrent reaper.
+          const currentRun = await getRun(run.id);
+          if (!currentRun || currentRun.status !== "running" || currentRun.errorCode !== DETACHED_PROCESS_ERROR_CODE) {
+            return;
+          }
+
+          const now = new Date();
+          const tracksLocalChild = isTrackedLocalChildProcessAdapter(adapterType);
+          const shouldRetry =
+            tracksLocalChild &&
+            (!!currentRun.processPid || !!currentRun.processGroupId) &&
+            (currentRun.processLossRetryCount ?? 0) < 1;
+
+          const baseMessage = timedOut
+            ? `Detached orphan pid ${pid} watcher timed out after ${Math.round(elapsed / 60_000)}m; treating as lost`
+            : buildProcessLossMessage(currentRun);
+
+          let finalizedRun = await setRunStatus(currentRun.id, "failed", {
+            error: shouldRetry ? `${baseMessage}; retrying once` : baseMessage,
+            errorCode: "process_lost",
+            finishedAt: now,
+            resultJson: mergeRunStopMetadataForAgent({ adapterType, adapterConfig }, "failed", {
+              resultJson: parseObject(currentRun.resultJson),
+              errorCode: "process_lost",
+              errorMessage: shouldRetry ? `${baseMessage}; retrying once` : baseMessage,
+            }),
+          });
+          await setWakeupStatus(currentRun.wakeupRequestId, "failed", {
+            finishedAt: now,
+            error: shouldRetry ? `${baseMessage}; retrying once` : baseMessage,
+          });
+          if (!finalizedRun) finalizedRun = await getRun(currentRun.id);
+          if (!finalizedRun) return;
+          finalizedRun = (await classifyAndPersistRunLiveness(finalizedRun, parseObject(finalizedRun.resultJson))) ?? finalizedRun;
+
+          let retriedRun: typeof heartbeatRuns.$inferSelect | null = null;
+          if (shouldRetry) {
+            const agent = await getAgent(currentRun.agentId);
+            if (agent) {
+              retriedRun = await enqueueProcessLossRetry(finalizedRun, agent, now);
+            }
+          } else {
+            await releaseIssueExecutionAndPromote(finalizedRun);
+          }
+
+          await appendRunEvent(finalizedRun, await nextRunEventSeq(finalizedRun.id), {
+            eventType: "lifecycle",
+            stream: "system",
+            level: "error",
+            message: shouldRetry
+              ? `${baseMessage}; queued retry ${retriedRun?.id ?? ""}`.trim()
+              : baseMessage,
+            payload: {
+              ...(currentRun.processPid ? { processPid: currentRun.processPid } : {}),
+              ...(currentRun.processGroupId ? { processGroupId: currentRun.processGroupId } : {}),
+              ...(retriedRun ? { retryRunId: retriedRun.id } : {}),
+              timedOut,
+            },
+          });
+
+          await finalizeAgentStatus(currentRun.agentId, "failed");
+          await startNextQueuedRunForAgent(currentRun.agentId);
+          runningProcesses.delete(currentRun.id);
+
+          logger.warn(
+            { runId: currentRun.id, pid, timedOut, didRetry: !!retriedRun },
+            "detached orphan PID watcher finalized run after process exit",
+          );
+        })().catch((err) => {
+          logger.error({ err, runId: run.id, pid }, "detached orphan PID watcher error");
+        });
+      }, pollIntervalMs);
+    }
+
+    return { watching: toWatch.length };
+  }
+
   async function resumeQueuedRuns() {
     const queuedRuns = await db
       .select({ agentId: heartbeatRuns.agentId })
@@ -7251,6 +7376,8 @@ export function heartbeatService(db: Db) {
     reportRunActivity: clearDetachedRunWarning,
 
     reapOrphanedRuns,
+
+    watchDetachedOrphanedPids,
 
     promoteDueScheduledRetries,
 
