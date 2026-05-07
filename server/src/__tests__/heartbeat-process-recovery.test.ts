@@ -1359,4 +1359,153 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       return run?.status === "failed" ? run : null;
     }, 5_000);
   }, 15_000);
+
+  it("watchDetachedOrphanedPids finalizes with timedOut=true when maxWatchMs elapses while PID is alive", async () => {
+    const child = spawnAliveProcess();
+    childProcesses.add(child);
+    expect(child.pid).toBeTypeOf("number");
+
+    const { agentId, runId, issueId } = await seedRunFixture({
+      processPid: child.pid ?? null,
+      runErrorCode: "process_detached",
+      runError: `Lost in-memory process handle, but child pid ${child.pid} is still alive`,
+    });
+    const heartbeat = heartbeatService(db);
+
+    // maxWatchMs=100 fires the timedOut branch while the child is still alive.
+    const result = await heartbeat.watchDetachedOrphanedPids({ pollIntervalMs: 50, maxWatchMs: 100 });
+    expect(result.watching).toBe(1);
+
+    const finalRun = await waitForValue(async () => {
+      const run = await heartbeat.getRun(runId);
+      return run?.status === "failed" ? run : null;
+    }, 5_000);
+
+    expect(finalRun?.status).toBe("failed");
+    expect(finalRun?.errorCode).toBe("process_lost");
+    expect(finalRun?.error).toMatch(/timed out/i);
+
+    // The run event must record timedOut=true in its payload.
+    const events = await db
+      .select()
+      .from(heartbeatRunEvents)
+      .where(eq(heartbeatRunEvents.runId, runId));
+    const lifecycleEvent = events.find(
+      (e) => (e.payload as Record<string, unknown> | null)?.timedOut === true,
+    );
+    expect(lifecycleEvent).toBeTruthy();
+
+    // processLossRetryCount=0 → shouldRetry=true → a retry run is enqueued.
+    const runs = await db
+      .select()
+      .from(heartbeatRuns)
+      .where(eq(heartbeatRuns.agentId, agentId));
+    expect(runs).toHaveLength(2);
+    const retryRun = runs.find((row) => row.id !== runId);
+    expect(retryRun?.status).toBe("queued");
+    expect(retryRun?.retryOfRunId).toBe(runId);
+
+    const issue = await db
+      .select()
+      .from(issues)
+      .where(eq(issues.id, issueId))
+      .then((rows) => rows[0] ?? null);
+    expect(issue?.executionRunId).toBe(retryRun?.id ?? null);
+
+    if (retryRun?.id) {
+      await waitForRunToSettle(heartbeat, retryRun.id, 5_000);
+    }
+  }, 20_000);
+
+  it("watchDetachedOrphanedPids calls releaseIssueExecutionAndPromote when shouldRetry is false (retry exhausted)", async () => {
+    const child = spawnAliveProcess();
+    childProcesses.add(child);
+    expect(child.pid).toBeTypeOf("number");
+
+    // processLossRetryCount=1 exhausts the one allowed retry → shouldRetry=false.
+    const { agentId, runId, issueId } = await seedRunFixture({
+      processPid: child.pid ?? null,
+      processLossRetryCount: 1,
+      runErrorCode: "process_detached",
+      runError: `Lost in-memory process handle, but child pid ${child.pid} is still alive`,
+    });
+    const heartbeat = heartbeatService(db);
+
+    const result = await heartbeat.watchDetachedOrphanedPids({ pollIntervalMs: 50 });
+    expect(result.watching).toBe(1);
+
+    // Kill the child so the watcher detects process exit.
+    child.kill("SIGKILL");
+    childProcesses.delete(child);
+
+    const finalRun = await waitForValue(async () => {
+      const run = await heartbeat.getRun(runId);
+      return run?.status === "failed" ? run : null;
+    }, 5_000);
+
+    expect(finalRun?.status).toBe("failed");
+    expect(finalRun?.errorCode).toBe("process_lost");
+
+    // shouldRetry=false → no retry run created.
+    const runs = await db
+      .select()
+      .from(heartbeatRuns)
+      .where(eq(heartbeatRuns.agentId, agentId));
+    expect(runs).toHaveLength(1);
+
+    // releaseIssueExecutionAndPromote clears the issue's executionRunId.
+    const issue = await db
+      .select()
+      .from(issues)
+      .where(eq(issues.id, issueId))
+      .then((rows) => rows[0] ?? null);
+    expect(issue?.executionRunId).toBeNull();
+  }, 15_000);
+
+  it("watchDetachedOrphanedPids guard skips finalization when run is no longer running at interval fire", async () => {
+    const child = spawnAliveProcess();
+    childProcesses.add(child);
+    expect(child.pid).toBeTypeOf("number");
+
+    const { runId } = await seedRunFixture({
+      processPid: child.pid ?? null,
+      runErrorCode: "process_detached",
+      runError: `Lost in-memory process handle, but child pid ${child.pid} is still alive`,
+      includeIssue: false,
+    });
+    const heartbeat = heartbeatService(db);
+
+    // Use a longer poll interval so we can update the DB before the first fire.
+    const result = await heartbeat.watchDetachedOrphanedPids({ pollIntervalMs: 200 });
+    expect(result.watching).toBe(1);
+
+    // Simulate a concurrent reaper finalizing the run before the watcher interval fires.
+    const now = new Date();
+    await db
+      .update(heartbeatRuns)
+      .set({
+        status: "failed",
+        errorCode: "process_lost",
+        error: "Concurrent finalizer got here first",
+        finishedAt: now,
+        updatedAt: now,
+      })
+      .where(eq(heartbeatRuns.id, runId));
+
+    // Kill the child so the watcher's pidDead check becomes true.
+    child.kill("SIGKILL");
+    childProcesses.delete(child);
+
+    // Wait past two poll intervals to give the watcher time to fire and return early.
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    // Guard returned early — the run retains the concurrent finalizer's error, not a new one.
+    const run = await heartbeat.getRun(runId);
+    expect(run?.status).toBe("failed");
+    expect(run?.error).toBe("Concurrent finalizer got here first");
+
+    // No second run should have been created.
+    const allRuns = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, runId));
+    expect(allRuns).toHaveLength(1);
+  }, 10_000);
 });
