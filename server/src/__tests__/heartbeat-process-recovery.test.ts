@@ -1376,32 +1376,27 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     const result = await heartbeat.watchDetachedOrphanedPids({ pollIntervalMs: 50, maxWatchMs: 100 });
     expect(result.watching).toBe(1);
 
-    const finalRun = await waitForValue(async () => {
-      const run = await heartbeat.getRun(runId);
-      return run?.status === "failed" ? run : null;
+    // Wait for the run event with timedOut=true — it's appended after setRunStatus so we
+    // poll directly to avoid racing the watcher's async body.
+    const lifecycleEvent = await waitForValue(async () => {
+      const events = await db
+        .select()
+        .from(heartbeatRunEvents)
+        .where(eq(heartbeatRunEvents.runId, runId));
+      return events.find((e) => (e.payload as Record<string, unknown> | null)?.timedOut === true) ?? null;
     }, 5_000);
+    expect(lifecycleEvent).toBeTruthy();
 
+    const finalRun = await heartbeat.getRun(runId);
     expect(finalRun?.status).toBe("failed");
     expect(finalRun?.errorCode).toBe("process_lost");
     expect(finalRun?.error).toMatch(/timed out/i);
 
-    // The run event must record timedOut=true in its payload.
-    const events = await db
-      .select()
-      .from(heartbeatRunEvents)
-      .where(eq(heartbeatRunEvents.runId, runId));
-    const lifecycleEvent = events.find(
-      (e) => (e.payload as Record<string, unknown> | null)?.timedOut === true,
-    );
-    expect(lifecycleEvent).toBeTruthy();
-
     // processLossRetryCount=0 → shouldRetry=true → a retry run is enqueued.
-    const runs = await db
-      .select()
-      .from(heartbeatRuns)
-      .where(eq(heartbeatRuns.agentId, agentId));
-    expect(runs).toHaveLength(2);
-    const retryRun = runs.find((row) => row.id !== runId);
+    const retryRun = await waitForValue(async () => {
+      const rows = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.agentId, agentId));
+      return rows.find((row) => row.id !== runId) ?? null;
+    }, 5_000);
     expect(retryRun?.status).toBe("queued");
     expect(retryRun?.retryOfRunId).toBe(runId);
 
@@ -1438,11 +1433,15 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     child.kill("SIGKILL");
     childProcesses.delete(child);
 
-    const finalRun = await waitForValue(async () => {
-      const run = await heartbeat.getRun(runId);
-      return run?.status === "failed" ? run : null;
+    // Wait for releaseIssueExecutionAndPromote to complete. With the agent paused and retry
+    // exhausted, the issue gets blocked — use that as the stable completion signal.
+    const blockedIssue = await waitForValue(async () => {
+      const row = await db.select().from(issues).where(eq(issues.id, issueId)).then((rows) => rows[0] ?? null);
+      return row?.status === "blocked" ? row : null;
     }, 5_000);
+    expect(blockedIssue).toBeTruthy();
 
+    const finalRun = await heartbeat.getRun(runId);
     expect(finalRun?.status).toBe("failed");
     expect(finalRun?.errorCode).toBe("process_lost");
 
@@ -1453,13 +1452,8 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       .where(eq(heartbeatRuns.agentId, agentId));
     expect(runs).toHaveLength(1);
 
-    // releaseIssueExecutionAndPromote clears the issue's executionRunId.
-    const issue = await db
-      .select()
-      .from(issues)
-      .where(eq(issues.id, issueId))
-      .then((rows) => rows[0] ?? null);
-    expect(issue?.executionRunId).toBeNull();
+    // releaseIssueExecutionAndPromote cleared executionRunId before blocking the issue.
+    expect(blockedIssue?.executionRunId).toBeNull();
   }, 15_000);
 
   it("watchDetachedOrphanedPids guard skips finalization when run is no longer running at interval fire", async () => {
